@@ -1,6 +1,9 @@
 package com.self.mianshi.controller;
 
+import cn.dev33.satoken.annotation.SaCheckRole;
+import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.json.JSONUtil;
+import com.alibaba.nacos.api.config.annotation.NacosValue;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.self.mianshi.common.BaseResponse;
 import com.self.mianshi.common.DeleteRequest;
@@ -9,6 +12,7 @@ import com.self.mianshi.common.ResultUtils;
 import com.self.mianshi.constant.UserConstant;
 import com.self.mianshi.exception.BusinessException;
 import com.self.mianshi.exception.ThrowUtils;
+import com.self.mianshi.manager.CounterManager;
 import com.self.mianshi.model.dto.question.*;
 import com.self.mianshi.model.entity.Question;
 import com.self.mianshi.model.entity.User;
@@ -51,7 +55,7 @@ public class QuestionController {
      * @return
      */
     @PostMapping("/add")
-//    @SaCheckRole(UserConstant.ADMIN_ROLE)
+    @SaCheckRole(UserConstant.ADMIN_ROLE)
     public BaseResponse<Long> addQuestion(@RequestBody QuestionAddRequest questionAddRequest, HttpServletRequest request) {
         ThrowUtils.throwIf(questionAddRequest == null, ErrorCode.PARAMS_ERROR);
         // todo 在此处将实体类和 DTO 进行转换
@@ -82,7 +86,7 @@ public class QuestionController {
      * @return
      */
     @PostMapping("/delete")
-//    @SaCheckRole(UserConstant.ADMIN_ROLE)
+    @SaCheckRole(UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> deleteQuestion(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
         if (deleteRequest == null || deleteRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -109,7 +113,7 @@ public class QuestionController {
      * @return
      */
     @PostMapping("/update")
-//    @SaCheckRole(UserConstant.ADMIN_ROLE)
+    @SaCheckRole(UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> updateQuestion(@RequestBody QuestionUpdateRequest questionUpdateRequest) {
         if (questionUpdateRequest == null || questionUpdateRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -145,7 +149,7 @@ public class QuestionController {
         // 检测和处置爬虫（可以自行扩展为 - 登录后才能获取到答案）
         User loginUser = userService.getLoginUserPermitNull(request);
         if (loginUser != null) {
-//            crawlerDetect(loginUser.getId());
+            crawlerDetect(loginUser.getId());
         }
         // 友情提示，对于敏感的内容，可以再打印一些日志，记录用户访问的内容
         // 查询数据库
@@ -156,40 +160,47 @@ public class QuestionController {
     }
 
     // 仅是为了方便，才把这段代码写到这里
-//    @Resource
-//    private CounterManager counterManager;
+    @Resource
+    private CounterManager counterManager;
+
+    @NacosValue(value = "${warn.count:10}", autoRefreshed = true)
+    private Integer warnCount;
+
+    @NacosValue(value = "${ban.count:20}", autoRefreshed = true)
+    private Integer banCount;
+
 
     /**
      * 检测爬虫
      *
      * @param loginUserId
      */
-//    private void crawlerDetect(long loginUserId) {
-//        // 调用多少次时告警
-//        final int WARN_COUNT = 10;
-//        // 调用多少次时封号
-//        final int BAN_COUNT = 20;
-//        // 拼接访问 key
-//        String key = String.format("user:access:%s", loginUserId);
-//        // 统计一分钟内访问次数，180 秒过期
-//        long count = counterManager.incrAndGetCounter(key, 1, TimeUnit.MINUTES, 180);
-//        // 是否封号
-//        if (count > BAN_COUNT) {
-//            // 踢下线
-//            StpUtil.kickout(loginUserId);
-//            // 封号
-//            User updateUser = new User();
-//            updateUser.setId(loginUserId);
-//            updateUser.setUserRole("ban");
-//            userService.updateById(updateUser);
-//            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "访问次数过多，已被封号");
-//        }
-//        // 是否告警
-//        if (count == WARN_COUNT) {
-//            // 可以改为向管理员发送邮件通知
-//            throw new BusinessException(110, "警告：访问太频繁");
-//        }
-//    }
+    private void crawlerDetect(long loginUserId) {
+        // 调用多少次时告警
+        final int WARN_COUNT = 10;
+        // 调用多少次时封号
+        final int BAN_COUNT = 20;
+        // 拼接访问 key
+        String key = String.format("user:access:%s", loginUserId);
+        // 统计一分钟内访问次数，180 秒过期
+        long count = counterManager.incrAndGetCounter(key, 1, TimeUnit.MINUTES, 180);
+        // 是否封号
+        if (count > banCount) {
+            // 踢下线
+            StpUtil.kickout(loginUserId);
+            // 封号
+            User updateUser = new User();
+            updateUser.setId(loginUserId);
+            updateUser.setUserRole("ban");
+            userService.updateById(updateUser);
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "访问次数过多，已被封号");
+        }
+        // 是否告警
+        if (count == warnCount) {
+            // 可以改为向管理员发送邮件通知
+            throw new BusinessException(110, "警告：访问太频繁");
+        }
+    }
 
     /**
      * 分页获取题目列表（仅管理员可用）
@@ -198,7 +209,7 @@ public class QuestionController {
      * @return
      */
     @PostMapping("/list/page")
-//    @SaCheckRole(UserConstant.ADMIN_ROLE)
+    @SaCheckRole(UserConstant.ADMIN_ROLE)
     public BaseResponse<Page<Question>> listQuestionByPage(@RequestBody QuestionQueryRequest questionQueryRequest) {
         ThrowUtils.throwIf(questionQueryRequest == null, ErrorCode.PARAMS_ERROR);
         // 查询数据库
@@ -312,7 +323,7 @@ public class QuestionController {
      * @return
      */
     @PostMapping("/edit")
-//    @SaCheckRole(UserConstant.ADMIN_ROLE)
+    @SaCheckRole(UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> editQuestion(@RequestBody QuestionEditRequest questionEditRequest, HttpServletRequest request) {
         if (questionEditRequest == null || questionEditRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -351,14 +362,14 @@ public class QuestionController {
         ThrowUtils.throwIf(size > 200, ErrorCode.PARAMS_ERROR);
         // todo 取消注释开启 ES（须先配置 ES）
         // 查询 ES
-        // Page<Question> questionPage = questionService.searchFromEs(questionQueryRequest);
+         Page<Question> questionPage = questionService.searchFromEs(questionQueryRequest);
         // 查询数据库（作为没有 ES 的降级方案）
-        Page<Question> questionPage = questionService.listQuestionByPage(questionQueryRequest);
+//        Page<Question> questionPage = questionService.listQuestionByPage(questionQueryRequest);
         return ResultUtils.success(questionService.getQuestionVOPage(questionPage, request));
     }
 
     @PostMapping("/delete/batch")
-//    @SaCheckRole(UserConstant.ADMIN_ROLE)
+    @SaCheckRole(UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> batchDeleteQuestions(@RequestBody QuestionBatchDeleteRequest questionBatchDeleteRequest) {
         ThrowUtils.throwIf(questionBatchDeleteRequest == null, ErrorCode.PARAMS_ERROR);
         questionService.batchDeleteQuestions(questionBatchDeleteRequest.getQuestionIdList());

@@ -1,7 +1,13 @@
 package com.self.mianshi.controller;
 
 
+import cn.dev33.satoken.annotation.SaCheckRole;
+import com.alibaba.csp.sentinel.Tracer;
+import com.alibaba.csp.sentinel.annotation.SentinelResource;
+import com.alibaba.csp.sentinel.slots.block.BlockException;
+import com.alibaba.csp.sentinel.slots.block.degrade.DegradeException;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.jd.platform.hotkey.client.callback.JdHotKeyStore;
 import com.self.mianshi.common.BaseResponse;
 import com.self.mianshi.common.DeleteRequest;
 import com.self.mianshi.common.ErrorCode;
@@ -19,10 +25,12 @@ import com.self.mianshi.model.entity.QuestionBank;
 import com.self.mianshi.model.entity.User;
 import com.self.mianshi.model.vo.QuestionBankVO;
 import com.self.mianshi.model.vo.QuestionVO;
+import com.self.mianshi.sentinel.SentinelConstant;
 import com.self.mianshi.service.QuestionBankService;
 import com.self.mianshi.service.QuestionService;
 import com.self.mianshi.service.UserService;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
@@ -50,6 +58,8 @@ public class QuestionBankController {
     private UserService userService;
 
     // region 增删改查
+    @Resource
+    private RedissonClient redissonClient;
 
     /**
      * 创建题库
@@ -59,7 +69,7 @@ public class QuestionBankController {
      * @return
      */
     @PostMapping("/add")
-//    @SaCheckRole(UserConstant.ADMIN_ROLE)
+    @SaCheckRole(UserConstant.ADMIN_ROLE)
     public BaseResponse<Long> addQuestionBank(@RequestBody QuestionBankAddRequest questionBankAddRequest, HttpServletRequest request) {
         ThrowUtils.throwIf(questionBankAddRequest == null, ErrorCode.PARAMS_ERROR);
         // todo 在此处将实体类和 DTO 进行转换
@@ -86,7 +96,7 @@ public class QuestionBankController {
      * @return
      */
     @PostMapping("/delete")
-//    @SaCheckRole(UserConstant.ADMIN_ROLE)
+    @SaCheckRole(UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> deleteQuestionBank(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
         if (deleteRequest == null || deleteRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -113,7 +123,7 @@ public class QuestionBankController {
      * @return
      */
     @PostMapping("/update")
-//    @SaCheckRole(UserConstant.ADMIN_ROLE)
+    @SaCheckRole(UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> updateQuestionBank(@RequestBody QuestionBankUpdateRequest questionBankUpdateRequest) {
         if (questionBankUpdateRequest == null || questionBankUpdateRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -146,17 +156,26 @@ public class QuestionBankController {
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
 
         // todo 取消注释开启 HotKey（须确保 HotKey 依赖被打进 jar 包）
-//        // 生成 key
-//        String key = "bank_detail_" + id;
-//        // 如果是热 key
-//        if (JdHotKeyStore.isHotKey(key)) {
-//            // 从本地缓存中获取缓存值
-//            Object cachedQuestionBankVO = JdHotKeyStore.get(key);
-//            if (cachedQuestionBankVO != null) {
-//                // 如果缓存中有值，直接返回缓存的值
-//                return ResultUtils.success((QuestionBankVO) cachedQuestionBankVO);
-//            }
+        // 生成 key
+        String key = "bank_detail_" + id;
+
+        //todo 自己改造 将数据放入redis中 而不是本地缓存
+//        Object o = redissonClient.getBucket(key).get();
+//        if (!Objects.isNull(o)){
+//            log.info("redisson get object {}",o);
+//            return ResultUtils.success((QuestionBankVO) o);
 //        }
+        // 如果是热 key
+        if (JdHotKeyStore.isHotKey(key)) {
+            // 从本地缓存中获取缓存值
+            Object cachedQuestionBankVO = JdHotKeyStore.get(key);
+            //todo 自己改造 将数据放入redis中 而不是本地缓存
+//            redissonClient.getBucket(key).set(cachedQuestionBankVO);
+            if (cachedQuestionBankVO != null) {
+                // 如果缓存中有值，直接返回缓存的值
+                return ResultUtils.success((QuestionBankVO) cachedQuestionBankVO);
+            }
+        }
 
         // 查询数据库
         QuestionBank questionBank = questionBankService.getById(id);
@@ -178,7 +197,7 @@ public class QuestionBankController {
 
         // todo 取消注释开启 HotKey（须确保 HotKey 依赖被打进 jar 包）
 //        // 设置本地缓存（如果不是热 key，这个方法不会设置缓存）
-//        JdHotKeyStore.smartSet(key, questionBankVO);
+        JdHotKeyStore.smartSet(key, questionBankVO);
 
         // 获取封装类
         return ResultUtils.success(questionBankVO);
@@ -191,7 +210,7 @@ public class QuestionBankController {
      * @return
      */
     @PostMapping("/list/page")
-//    @SaCheckRole(UserConstant.ADMIN_ROLE)
+    @SaCheckRole(UserConstant.ADMIN_ROLE)
     public BaseResponse<Page<QuestionBank>> listQuestionBankByPage(@RequestBody QuestionBankQueryRequest questionBankQueryRequest) {
         long current = questionBankQueryRequest.getCurrent();
         long size = questionBankQueryRequest.getPageSize();
@@ -209,9 +228,9 @@ public class QuestionBankController {
      * @return
      */
     @PostMapping("/list/page/vo")
-//    @SentinelResource(value = SentinelConstant.listQuestionBankVOByPage,
-//            blockHandler = "handleBlockException",
-//            fallback = "handleFallback")
+    @SentinelResource(value = SentinelConstant.listQuestionBankVOByPage,
+            blockHandler = "handleBlockException",
+            fallback = "handleFallback")
     public BaseResponse<Page<QuestionBankVO>> listQuestionBankVOByPage(@RequestBody QuestionBankQueryRequest questionBankQueryRequest,
                                                                        HttpServletRequest request) {
         long current = questionBankQueryRequest.getCurrent();
@@ -229,16 +248,17 @@ public class QuestionBankController {
      * listQuestionBankVOByPage 流控操作（此处为了方便演示，写在同一个类中）
      * 限流：提示“系统压力过大，请耐心等待”
      * 熔断：执行降级操作
+     * 限流优先级 比熔断高！ 因为有了大量请求 失败才会导致降级熔断处理，那么就一定会有大量请求，就会先限流！！
      */
-//    public BaseResponse<Page<QuestionBankVO>> handleBlockException(@RequestBody QuestionBankQueryRequest questionBankQueryRequest,
-//                                                                   HttpServletRequest request, BlockException ex) {
-//        // 降级操作
-//        if (ex instanceof DegradeException) {
-//            return handleFallback(questionBankQueryRequest, request, ex);
-//        }
-//        // 限流操作
-//        return ResultUtils.error(ErrorCode.SYSTEM_ERROR, "系统压力过大，请耐心等待");
-//    }
+    public BaseResponse<Page<QuestionBankVO>> handleBlockException(@RequestBody QuestionBankQueryRequest questionBankQueryRequest,
+                                                                   HttpServletRequest request, BlockException ex) {
+        // 降级操作
+        if (ex instanceof DegradeException) {
+            return handleFallback(questionBankQueryRequest, request, ex);
+        }
+        // 限流操作
+        return ResultUtils.error(ErrorCode.SYSTEM_ERROR, "系统压力过大，请耐心等待");
+    }
 
     /**
      * listQuestionBankVOByPage 降级操作：直接返回本地数据（此处为了方便演示，写在同一个类中）
@@ -282,7 +302,7 @@ public class QuestionBankController {
      * @return
      */
     @PostMapping("/edit")
-//    @SaCheckRole(UserConstant.ADMIN_ROLE)
+    @SaCheckRole(UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> editQuestionBank(@RequestBody QuestionBankEditRequest questionBankEditRequest, HttpServletRequest request) {
         if (questionBankEditRequest == null || questionBankEditRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -307,5 +327,4 @@ public class QuestionBankController {
         return ResultUtils.success(true);
     }
 
-    // endregion
 }

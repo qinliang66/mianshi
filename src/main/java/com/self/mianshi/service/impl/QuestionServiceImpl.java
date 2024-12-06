@@ -26,12 +26,12 @@ import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.sort.SortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.elasticsearch.core.ElasticsearchRestTemplate;
+import org.springframework.data.elasticsearch.core.SearchHit;
 import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.data.elasticsearch.core.query.NativeSearchQuery;
 import org.springframework.data.elasticsearch.core.query.NativeSearchQueryBuilder;
@@ -315,10 +315,10 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
         page.setTotal(searchHits.getTotalHits());
         List<Question> resourceList = new ArrayList<>();
         if (searchHits.hasSearchHits()) {
-//            List<SearchHit<QuestionEsDTO>> searchHitList = searchHits.getSearchHits();
-//            for (SearchHit<QuestionEsDTO> questionEsDTOSearchHit : searchHitList) {
-//                resourceList.add(QuestionEsDTO.dtoToObj(questionEsDTOSearchHit.getContent()));
-//            }
+            List<SearchHit<QuestionEsDTO>> searchHitList = searchHits.getSearchHits();
+            for (SearchHit<QuestionEsDTO> questionEsDTOSearchHit : searchHitList) {
+                resourceList.add(QuestionEsDTO.dtoToObj(questionEsDTOSearchHit.getContent()));
+            }
         }
         page.setRecords(resourceList);
         return page;
